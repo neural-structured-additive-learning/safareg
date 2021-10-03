@@ -32,6 +32,7 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
       return(tf$keras$layers$Dense(
         units = output_dim,
         kernel_regularizer = kr,
+        use_bias = FALSE,
         name = makelayername(term, 
                              param_nr),
         ...
@@ -45,7 +46,7 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
     predict_trafo = function(newdata) lapply(newdata[extractvar(term)], as.integer),
     input_dim = as.integer(extractlen(term, data)),
     layer = layer,
-    coef = function(weights) as.matrix(weights)
+    coef = function(weights) as.matrix(weights[[1]])
   )
 }
 
@@ -68,6 +69,7 @@ interaction_processor <- function(term, data, output_dim, param_nr, controls = N
       return(tf$keras$layers$Dense(
         units = output_dim,
         kernel_regularizer = kr,
+        use_bias = FALSE,
         name = makelayername(term, 
                              param_nr),
         ...
