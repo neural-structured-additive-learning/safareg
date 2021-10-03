@@ -46,7 +46,7 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
     predict_trafo = function(newdata) lapply(newdata[extractvar(term)], as.integer),
     input_dim = as.integer(extractlen(term, data)),
     layer = layer,
-    coef = function(weights) as.matrix(weights[[1]])
+    coef = function(weights) as.matrix(weights)
   )
 }
 
