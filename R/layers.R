@@ -1,6 +1,6 @@
 # tp and ttp have different positioning internally (b,a instead of a,b)
 # as this results in a sparser design and penalty matrix
-tp_layer = function(a, b, pen=NULL, name=NULL, units = 1, with_layer = TRUE) {
+tp_layer = function(a, b, pen=NULL, name=NULL, units = 1L, with_layer = TRUE) {
   x <- tf_row_tensor(b, a)
   if(with_layer) x <- x %>% layer_dense(units = units, activation = "linear", 
                                         name = name, use_bias = FALSE, 
@@ -8,7 +8,7 @@ tp_layer = function(a, b, pen=NULL, name=NULL, units = 1, with_layer = TRUE) {
   return(x)
 }
 
-ttp_layer = function(a, b, c, pen=NULL, name=NULL, units = 1, with_layer = TRUE) {
+ttp_layer = function(a, b, c, pen=NULL, name=NULL, units = 1L, with_layer = TRUE) {
   
   x <- tf_row_tensor(tf_row_tensor(b, c), a) 
   if(with_layer) x <- x %>% layer_dense(units = units, activation = "linear", 
@@ -18,12 +18,32 @@ ttp_layer = function(a, b, c, pen=NULL, name=NULL, units = 1, with_layer = TRUE)
   return(x)
 }
 
+layer_arram = function(a, b, pen=NULL, name=NULL) {
+  
+  lal <- linearArrayRWT(units = c(a$shape[[2]], b$shape[[2]]), P = pen, name = name)
+  return(lal(list(a,b)))
+  
+}
+
 pen_vc <- function(P, strength, nlev)
 {
+  python_path <- system.file("python", package = "safareg")
+  layers <- reticulate::import_from_path("layers", path = python_path)
+  return(layers$squaredPenaltyVC(P = as.matrix(P), strength = strength, nlev = nlev))
+}
+
+pen_simple <- function(P, strength)
+{
   python_path <- system.file("python", package = "deepregression")
-  splines <- reticulate::import_from_path("psplines", path = python_path)
-  return(splines$squaredPenaltyVC(P = as.matrix(P), strength = strength, nlev = nlev))
-  
+  layers <- reticulate::import_from_path("psplines", path = python_path)
+  return(layers$squaredPenalty(P = as.matrix(P), strength = strength))
+}
+
+linearArrayRWT <- function(units, P, name)
+{
+  python_path <- system.file("python", package = "safareg")
+  layers <- reticulate::import_from_path("layers", path = python_path)
+  return(layers$LinearArrayRWT(units = units, P = as.matrix(P), name = name))
 }
 
 vc_block <- function(ncolNum, levFac, penalty = NULL, name = NULL, units = 1, with_layer = TRUE){
@@ -35,13 +55,65 @@ vc_block <- function(ncolNum, levFac, penalty = NULL, name = NULL, units = 1, wi
     
     a = tf_stride_cols(x, 1, ncolNum)
     b = tf$one_hot(tf$cast(
-      (tf_stride_cols(x, ncolNum+1)[,1]), 
+      tf_stride_cols(x, ncolNum+1), 
       dtype="int32"), 
       depth=levFac)
+    if(length(b$shape)==2)
+      b <- tf$squeeze(b, axis=1L)
     return(tp_layer(a, b, pen=penalty, name=name, units=units, with_layer=with_layer))
     
   }
   return(ret_fun)
+}
+
+arraym_block <- function(ncolNum, levFac, penalty = NULL, name = NULL){
+  
+  ret_fun <- function(x){
+    
+    a = tf_stride_cols(x, 1, ncolNum)
+    b = tf$one_hot(tf$cast(
+      tf_stride_cols(x, ncolNum+1), 
+      dtype="int32"), 
+      depth=levFac)
+    if(length(b$shape)==2)
+      b <- tf$squeeze(b, axis=1L)
+    return(layer_arram(a, b, pen=penalty, name=name))
+    
+  }
+  return(ret_fun)
+  
+}
+
+vf_block <- function(ncolNum, levFac1, levFac2, dim, penalty = NULL, name = NULL, units = 1){
+  
+  fz <- factorization(
+    dim,
+    levFac1,
+    levFac2,
+    NULL,
+    name_prefix = name)
+  
+  if(!is.null(penalty))
+    penalty = pen_simple(penalty, 1)
+  
+  ret_fun <- function(x){
+    
+    a = tf_stride_cols(x, 1, ncolNum)
+    b_c = tf$cast(tf_stride_cols(x,as.integer((ncolNum+1)),as.integer((ncolNum+2))), dtype="int32")
+    fz_res = fz(b_c)
+    
+    basis_times_latent = tf$multiply(a, fz_res)
+    ret <- basis_times_latent %>% layer_dense(units = units, activation = "linear", 
+                                              name = name, use_bias = FALSE, 
+                                              kernel_regularizer = penalty)
+    
+    return(ret)
+    
+    
+  }
+  
+  return(ret_fun)
+  
 }
 
 vvc_block <- function(ncolNum, levFac1, levFac2, penalty = NULL, name = NULL, units = 1, with_layer = TRUE){
@@ -49,19 +121,20 @@ vvc_block <- function(ncolNum, levFac1, levFac2, penalty = NULL, name = NULL, un
   if(!is.null(penalty))
     penalty = pen_vc(penalty, strength=1, nlev=levFac1*levFac2)
   
-  ret_fun <- function(x) ttp_layer(x[,as.integer(1:ncolNum)],
-                                   tf$one_hot(tf$cast(x[,as.integer((ncolNum+1))], dtype="int32"), 
-                                              depth=levFac1),
-                                   tf$one_hot(tf$cast(x[,as.integer((ncolNum+2))], dtype="int32"), 
-                                              depth=levFac2), 
+  b <- tf$one_hot(tf$cast(tf_stride_cols(x,as.integer((ncolNum+1))), dtype="int32"), 
+                  depth=levFac1)
+  c <- tf$one_hot(tf$cast(tf_stride_cols(x,as.integer((ncolNum+2))), dtype="int32"), 
+                  depth=levFac2)
+  
+  if(length(b$shape)==2)
+    b <- tf$squeeze(b, axis=1L)
+  if(length(c$shape)==2)
+    c <- tf$squeeze(c, axis=1L)
+  
+  ret_fun <- function(x) ttp_layer(x[,as.integer(1:ncolNum)], b, c, 
                                    pen=penalty, name=name, units=units, with_layer=with_layer)
   
   return(ret_fun)
-}
-
-pen_vc_gen <- function()
-{
-  
 }
 
 layer_factor <- function(nlev, units = 1, activation = "linear", use_bias = FALSE, name = NULL,
@@ -91,28 +164,25 @@ layer_random_effect <- function(freq, df)
   
 }
 
-factorization_machine <- function(embedding_dim,
-                                  xlev,
-                                  ylev,
-                                  zlev) {
+factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix) {
   
   dotprod <- function(a,b) tf$math$reduce_sum(tf$multiply(a,b), 
                                               axis=2L)
   
-  dot_fun <- keras_model_custom(name = "factorization_machine", function(self) {
+  dot_fun <- keras_model_custom(name = "factorization", function(self) {
     self$x_embedding <-
       layer_embedding(
         input_dim = xlev + 1,
         output_dim = embedding_dim,
         embeddings_initializer = initializer_random_uniform(minval = 0, maxval = 0.05),
-        name = "first_level_embedding"
+        name = paste0(name_prefix, "first_level_embedding")
       )
     self$y_embedding <-
       layer_embedding(
         input_dim = ylev + 1,
         output_dim = embedding_dim,
         embeddings_initializer = initializer_random_uniform(minval = 0, maxval = 0.05),
-        name = "second_level_embedding"
+        name = paste0(name_prefix, "second_level_embedding")
       )
     
     if(is.null(zlev)){
@@ -136,7 +206,7 @@ factorization_machine <- function(embedding_dim,
           input_dim = zlev + 1,
           output_dim = embedding_dim,
           embeddings_initializer = initializer_random_uniform(minval = 0, maxval = 0.05),
-          name = "third_level_embedding"
+          name = paste0(name_prefix, "third_level_embedding")
         )
       self$dot <-
         layer_lambda(

@@ -1,1 +1,4 @@
-# sfamreg
+# safareg: Structured Additive Factorization Regression
+
+
+

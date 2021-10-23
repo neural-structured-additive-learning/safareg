@@ -1,11 +1,11 @@
-Package: sfamreg
-Title: Efficient structured factorization machines and factor regression
+Package: safareg
+Title: Efficient structured additive factorization and factor regression
 Version: 0.1
 Authors@R: c(
     person("David", "Ruegamer", , "david.ruegamer@gmail.com", role = c("aut", "cre"))
     )
 Description:
-    Efficient structured factorization machines and factor regression
+    Efficient structured additive factorization and factor regression
 Depends: R (>= 4.0.0)
 Imports:
     deepregression

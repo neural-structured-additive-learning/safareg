@@ -27,16 +27,35 @@ class squaredPenaltyVC(regularizers.Regularizer):
 
     def __init__(self, P, strength, nlev):
         self.strength = strength
-        self.P = P
+        self.P = tf.cast(P, dtype="float32")
         self.nlev = nlev
 
     def __call__(self, x):
-        x_splitted = tf.split(x, nlev)
+        x_splitted = tf.split(x, self.nlev)
         pen = 0
         for x_k in x_splitted:
-            pen += tf.reduce_sum(vecmatvec(x_k, tf.cast(self.P, dtype="float32"), sparse_mat = True))
+            pen += tf.reduce_sum(vecmatvec(x_k, self.P, sparse_mat = True))
         return self.strength * pen
 
     def get_config(self):
         return {'strength': self.strength, 'P': self.P}
-    
+
+
+class LinearArrayRWT(keras.layers.Layer):
+    def __init__(self, units=(1, 1), P=None, name="linearArrayRWT"):
+        super(LinearArrayRWT, self).__init__()
+        self.units = units
+        self.P = tf.cast(P, dtype="float32")
+        self._name = name
+
+    def build(self, input_shape):
+        self.w = self.add_weight(
+            shape = self.units,
+            initializer="random_normal",
+            trainable=True,
+        )
+
+
+    def call(self, inputs):
+        self.add_loss(tf.reduce_sum(tf.multiply(self.w, tf.matmul(self.P, self.w))))
+        return tf.reduce_sum(tf.multiply(tf.matmul(inputs[0], self.w), inputs[1]), 1)
