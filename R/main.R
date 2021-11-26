@@ -42,8 +42,8 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
   }
     
   list(
-    data_trafo = function() lapply(data[extractvar(term)], as.integer),
-    predict_trafo = function(newdata) lapply(newdata[extractvar(term)], as.integer),
+    data_trafo = function() lapply(data[extractvar(term)], int_0based),
+    predict_trafo = function(newdata) lapply(newdata[extractvar(term)], int_0based),
     input_dim = as.integer(extractlen(term, data)),
     layer = layer,
     coef = function(weights) as.matrix(weights)
@@ -81,8 +81,8 @@ interaction_processor <- function(term, data, output_dim, param_nr, controls = N
   }
   
   list(
-    data_trafo = function() lapply(data[extractvar(term)], as.integer),
-    predict_trafo = function(newdata) lapply(newdata[extractvar(term)], as.integer),
+    data_trafo = function() lapply(data[extractvar(term)], int_0based),
+    predict_trafo = function(newdata) lapply(newdata[extractvar(term)], int_0based),
     input_dim = as.integer(extractlen(term, data)),
     layer = layer,
     coef = function(weights) as.matrix(weights)
@@ -132,11 +132,12 @@ vc_processor <- function(term, data, output_dim, param_nr, controls){
   
   list(
     data_trafo = function() do.call("cbind", c(list(evaluated_gam_term[[1]]$X), 
-                                               lapply(data[extractvar(byt)], as.integer))),
+                                               lapply(data[extractvar(byt)], int_0based))),
     predict_trafo = function(newdata) do.call("cbind", c(
       list(predict_gam_handler(evaluated_gam_term, newdata = newdata)),
-      lapply(data[extractvar(byt)],as.integer))),
+      lapply(data[extractvar(byt)],int_0based))),
     input_dim = as.integer(ncolNum + length(nlev)),
+    # plot_fun = function(self, weights, grid_length) gam_plot_data(self, weights, grid_length),
     layer = layer,
     coef = function(weights) as.matrix(weights)
   )
@@ -179,16 +180,39 @@ am_processor <- function(term, data, output_dim, param_nr, controls){
     stop("am terms with more than 1 factor currently not supported.")
   }
   
+  data_trafo = function() do.call("cbind", c(list(evaluated_gam_term[[1]]$X), 
+                                             lapply(data[extractvar(byt)], int_0based)))
+  predict_trafo = function(newdata) do.call("cbind", c(
+    list(predict_gam_handler(evaluated_gam_term, newdata = newdata)),
+    lapply(newdata[extractvar(byt)],int_0based)))
+  
   list(
-    data_trafo = function() do.call("cbind", c(list(evaluated_gam_term[[1]]$X), 
-                                               lapply(data[extractvar(byt)], as.integer))),
-    predict_trafo = function(newdata) do.call("cbind", c(
-      list(predict_gam_handler(evaluated_gam_term, newdata = newdata)),
-      lapply(data[extractvar(byt)],as.integer))),
+    data_trafo = data_trafo,
+    predict_trafo = predict_trafo,
+    plot_fun = function(self, weights, grid_length) 
+      gam_plot_data(self, weights, grid_length, pe_fun = pe_fun_am),
+    partial_effect = function(weights, newdata=NULL){
+      if(is.null(newdata)){
+        return(pe_fun_am(list(predict_trafo=function(df) data_trafo()),
+                         as.data.frame(data[c(extractvar(gampart), extractvar(byt))]), 
+                         weights))
+      }else{
+        return(pe_fun_am(list(predict_trafo=predict_trafo),
+                              df = newdata, weights))
+      }
+    },
+    get_org_values = function() data[c(extractvar(gampart), extractvar(byt))],
     input_dim = as.integer(ncolNum + length(nlev)),
     layer = layer,
     coef = function(weights) as.matrix(weights)
   )
+}
+
+pe_fun_am <- function(pp, df, weights){
+  
+  pmat <- pp$predict_trafo(df)
+  rowSums((pmat[,1:(ncol(pmat)-1)]%*%weights) * model.matrix(~ -1 + ., data = df[,2,drop=F]))
+  
 }
 
 #' Processor for factorization of two or three-level factor interactions
@@ -210,8 +234,8 @@ fz_processor <- function(term, data, output_dim, param_nr, controls = NULL){
   layer = function(x, ...) fz(x)
   
   list(
-    data_trafo = function() lapply(data[extractvar(term)], as.integer),
-    predict_trafo = function(newdata) lapply(newdata[extractvar(term)], as.integer),
+    data_trafo = function() lapply(data[extractvar(term)], int_0based),
+    predict_trafo = function(newdata) lapply(newdata[extractvar(term)], int_0based),
     input_dim = as.integer(extractlen(term, data)),
     layer = layer,
     coef = function(weights) as.matrix(weights)
@@ -255,15 +279,110 @@ vf_processor <- function(term, data, output_dim, param_nr, controls = NULL)
   
   list(
     data_trafo = function() do.call("cbind", c(list(evaluated_gam_term[[1]]$X), 
-                                               lapply(data[extractvar(byt)], as.integer))),
+                                               lapply(data[extractvar(byt)], int_0based))),
     predict_trafo = function(newdata) do.call("cbind", c(
       list(predict_gam_handler(evaluated_gam_term, newdata = newdata)),
-      lapply(data[extractvar(byt)],as.integer))),
+      lapply(data[extractvar(byt)],int_0based))),
     input_dim = as.integer(ncolNum + length(nlev)),
     layer = layer,
     coef = function(weights) as.matrix(weights)
   )
   
+}
+
+
+#' Processor for additive factorization machine
+#' 
+#' @export
+#' 
+afm_processor <- function(term, data, output_dim, param_nr, controls){
   
+  vars <- extractvar(term)
+  nfac <- extractval(term, "fac")
+  gamoptions <- "" # extractopts(term)
+  # extract gam part
   
+  output_dim <- as.integer(output_dim)
+  # extract mgcv smooth object
+  gamterms <- lapply(vars, function(var){
+    
+    gampart <- paste("s(", var, ")")
+    warning("add gamoptions")
+    
+    evaluated_gam_term <- handle_gam_term(object = gampart, 
+                                          data = data, 
+                                          controls = controls)
+    return(evaluated_gam_term)
+    
+  })
+
+  input_dims <- sapply(gamterms, function(x) ncol(x[[1]]$X))
+  penalties <- lapply(gamterms, function(x){
+    
+    sp_and_S <- extract_sp_S(x)
+    
+    sp_and_S <- list(sp = 1, 
+                     S = list(do.call("+", lapply(1:length(sp_and_S[[2]]), function(i)
+                       sp_and_S[[1]][[1]][i] * sp_and_S[[2]][[i]]))))
+    return(
+      as.matrix(bdiag(lapply(1:length(sp_and_S[[1]]), function(i) 
+        controls$sp_scale(data) * sp_and_S[[1]][[i]] * sp_and_S[[2]][[i]])))
+    )
+    
+  })
+  
+  splineparts <- lapply(1:nfac, function(j){
+    
+    lapply(1:length(gamterms), function(i){
+      
+      
+      
+      layer_spline(P = penalties[[i]], 
+                   name = paste0(makelayername(term, param_nr),
+                                 "te_", i, "_fac_", j), 
+                   units = output_dim)
+      
+    })
+    
+  })
+  
+  layer = function(x, ...){
+    
+    xsplit <- tf$split(x, num_or_size_splits = as.integer(length(vars)), axis = 1L)
+    
+    splineparts <- lapply(1:nfac, function(j) lapply(1:length(vars), function(i)
+      splineparts[[j]][[i]](xsplit[[i]])))
+    
+    firstpart <- lapply(1:nfac, function(j) tf$square(layer_add_identity(splineparts[[j]])))
+    scndpart <- lapply(1:nfac, function(j) layer_add_identity(lapply(splineparts[[j]], tf$square)))
+    combined <- lapply(1:nfac, function(j) tf$subtract(firstpart[[j]],scndpart[[j]]))
+    
+    res <- tf$multiply(0.5, layer_add_identity(combined))
+    
+    return(res)
+  
+  }
+    
+  data_trafo = function() do.call("cbind", lapply(gamterms, function(x) x[[1]]$X))
+  predict_trafo = function(newdata) do.call("cbind", lapply(gamterms, function(x)
+    predict_gam_handler(x, newdata = newdata)))
+  
+  list(
+    data_trafo = data_trafo,
+    predict_trafo = predict_trafo,
+    get_org_values = function() data[vars],
+    input_dim = as.integer(sum(input_dims)),
+    layer = layer,
+    partial_effect = function(weights, newdata=NULL){
+      if(is.null(newdata)){
+        return(rowSums(pe_fun_am(list(predict_trafo=function(df) data_trafo()),
+                                 as.data.frame(data[c(extractvar(gampart), extractvar(byt))]), 
+                                 weights))) 
+      }else{
+        return(rowSum(pe_fun_am(list(predict_trafo=predict_trafo),
+                                df = newdata, weights)))
+      }
+    },
+    coef = function(weights) as.matrix(weights)
+  )
 }

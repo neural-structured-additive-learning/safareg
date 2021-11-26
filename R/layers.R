@@ -18,7 +18,7 @@ ttp_layer = function(a, b, c, pen=NULL, name=NULL, units = 1L, with_layer = TRUE
   return(x)
 }
 
-layer_arram = function(a, b, pen=NULL, name=NULL) {
+layer_arram = function(a, b, pen=NULL, name="linearArrayRWT") {
   
   lal <- linearArrayRWT(units = c(a$shape[[2]], b$shape[[2]]), P = pen, name = name)
   return(lal(list(a,b)))
@@ -231,3 +231,5 @@ factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix) {
 return(dot_fun)
 
 }
+
+int_0based <- function(x) as.integer(x)-1L

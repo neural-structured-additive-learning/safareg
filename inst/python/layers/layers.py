@@ -42,7 +42,7 @@ class squaredPenaltyVC(regularizers.Regularizer):
 
 
 class LinearArrayRWT(keras.layers.Layer):
-    def __init__(self, units=(1, 1), P=None, name="linearArrayRWT"):
+    def __init__(self, units=(1, 1), P=None, name=None):
         super(LinearArrayRWT, self).__init__()
         self.units = units
         self.P = tf.cast(P, dtype="float32")
