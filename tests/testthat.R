@@ -1,4 +1,4 @@
 library(testthat)
-library(deepregression)
+library(safareg)
 
 test_check("sfamreg")

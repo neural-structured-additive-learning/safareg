@@ -18,11 +18,12 @@ onehotia <- function(x, xlev, ylev){
 
 #' Processor for factor terms with many levels
 #' 
+#' @import deepregression
 #' @export
 #' 
 fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
   # factor_layer
-  la <- extractval(term, "la", null_for_missing = TRUE)
+  la <- extractval(term, "la", default_for_missing = TRUE)
   kr <- NULL
   if(!is.null(la))
     kr <- tf$keras$regularizers$l2(l = la)
@@ -56,7 +57,7 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
 #' 
 interaction_processor <- function(term, data, output_dim, param_nr, controls = NULL){
   # factor_layer
-  la <- extractval(term, "la", null_for_missing = TRUE)
+  la <- extractval(term, "la", default_for_missing = TRUE)
   kr <- NULL
   if(!is.null(la))
     kr <- tf$keras$regularizers$l2(l = la)
@@ -108,14 +109,9 @@ vc_processor <- function(term, data, output_dim, param_nr, controls){
     stop("Can only deal with factor variables as by-terms in vc().")
   
   output_dim <- as.integer(output_dim)
-  # extract mgcv smooth object
-  evaluated_gam_term <- handle_gam_term(object = gampart, 
-                                        data = data, 
-                                        controls = controls)
+  ncolNum <- ncol(get_gamdata(gampart, param_nr, controls$gamdata, what="data_trafo")())
   
-  ncolNum <- ncol(evaluated_gam_term[[1]]$X)
-  
-  sp_and_S <- extract_sp_S(evaluated_gam_term)
+  sp_and_S <- get_gamdata(gampart, param_nr, controls$gamdata, what="sp_and_S")
   P <- sp_and_S[[1]][[1]] * sp_and_S[[2]][[1]]
   
   if(length(nlev)==1){
@@ -130,16 +126,25 @@ vc_processor <- function(term, data, output_dim, param_nr, controls){
     stop("vc terms with more than 2 factors currently not supported.")
   }
   
+  data_trafo <- function() do.call("cbind", c(list(
+    get_gamdata(gampart, param_nr, controls$gamdata, what="data_trafo")()), 
+    lapply(data[extractvar(byt)], int_0based)))
+  predict_trafo <- function(newdata) do.call("cbind", c(
+    list(get_gamdata(gampart, param_nr, controls$gamdata, what="predict_trafo")(newdata)),
+    lapply(data[extractvar(byt)],int_0based)))
+  
+  data_trafo_red <- function() do.call("cbind", lapply(data[extractvar(byt)], int_0based))
+  predict_trafo_red <- function(newdata) do.call("cbind", lapply(data[extractvar(byt)],int_0based))
+  
   list(
-    data_trafo = function() do.call("cbind", c(list(evaluated_gam_term[[1]]$X), 
-                                               lapply(data[extractvar(byt)], int_0based))),
-    predict_trafo = function(newdata) do.call("cbind", c(
-      list(predict_gam_handler(evaluated_gam_term, newdata = newdata)),
-      lapply(data[extractvar(byt)],int_0based))),
-    input_dim = as.integer(ncolNum + length(nlev)),
+    data_trafo = data_trafo_red,
+    predict_trafo = predict_trafo_red,
+    input_dim = as.integer(length(nlev)),
     # plot_fun = function(self, weights, grid_length) gam_plot_data(self, weights, grid_length),
     layer = layer,
-    coef = function(weights) as.matrix(weights)
+    coef = function(weights) as.matrix(weights),
+    gamdata_nr = get_gamdata_reduced_nr(gampart, param_nr, controls$gamdata),
+    gamdata_combined = TRUE
   )
 }
 
@@ -163,13 +168,9 @@ am_processor <- function(term, data, output_dim, param_nr, controls){
   
   output_dim <- as.integer(output_dim)
   # extract mgcv smooth object
-  evaluated_gam_term <- handle_gam_term(object = gampart, 
-                                        data = data, 
-                                        controls = controls)
+  ncolNum <- ncol(get_gamdata(gampart, param_nr, controls$gamdata, what="data_trafo")())
   
-  ncolNum <- ncol(evaluated_gam_term[[1]]$X)
-  
-  sp_and_S <- extract_sp_S(evaluated_gam_term)
+  sp_and_S <- get_gamdata(gampart, param_nr, controls$gamdata, what="sp_and_S")
   P <- sp_and_S[[1]][[1]] * sp_and_S[[2]][[1]]
   
   if(length(nlev)==1){
@@ -180,15 +181,19 @@ am_processor <- function(term, data, output_dim, param_nr, controls){
     stop("am terms with more than 1 factor currently not supported.")
   }
   
-  data_trafo = function() do.call("cbind", c(list(evaluated_gam_term[[1]]$X), 
-                                             lapply(data[extractvar(byt)], int_0based)))
+  data_trafo_red = function() do.call("cbind", lapply(data[extractvar(byt)], int_0based))
+  predict_trafo_red = function(newdata) do.call("cbind", lapply(newdata[extractvar(byt)],int_0based))
+  
+  data_trafo = function() do.call("cbind", c(list(
+    get_gamdata(gampart, param_nr, controls$gamdata, what="data_trafo")()
+  ), lapply(data[extractvar(byt)], int_0based)))
   predict_trafo = function(newdata) do.call("cbind", c(
-    list(predict_gam_handler(evaluated_gam_term, newdata = newdata)),
+    list(get_gamdata(gampart, param_nr, controls$gamdata, what="predict_trafo")(newdata)),
     lapply(newdata[extractvar(byt)],int_0based)))
   
   list(
-    data_trafo = data_trafo,
-    predict_trafo = predict_trafo,
+    data_trafo = data_trafo_red,
+    predict_trafo = predict_trafo_red,
     plot_fun = function(self, weights, grid_length) 
       gam_plot_data(self, weights, grid_length, pe_fun = pe_fun_am),
     partial_effect = function(weights, newdata=NULL){
@@ -202,9 +207,11 @@ am_processor <- function(term, data, output_dim, param_nr, controls){
       }
     },
     get_org_values = function() data[c(extractvar(gampart), extractvar(byt))],
-    input_dim = as.integer(ncolNum + length(nlev)),
+    input_dim = as.integer(length(nlev)),
     layer = layer,
-    coef = function(weights) as.matrix(weights)
+    coef = function(weights) as.matrix(weights),
+    gamdata_nr = get_gamdata_reduced_nr(gampart, param_nr, controls$gamdata),
+    gamdata_combined = TRUE
   )
 }
 
@@ -263,29 +270,53 @@ vf_processor <- function(term, data, output_dim, param_nr, controls = NULL)
   
   output_dim <- as.integer(output_dim)
   # extract mgcv smooth object
-  evaluated_gam_term <- handle_gam_term(object = gampart, 
-                                        data = data, 
-                                        controls = controls)
+  ncolNum <- ncol(get_gamdata(gampart, param_nr, controls$gamdata, what="data_trafo")())
   
-  ncolNum <- ncol(evaluated_gam_term[[1]]$X)
+  # what type of interaction
+  dimL = NULL
+  simple <- suppressWarnings(extractval(term, "simple"))
+  if(is.null(simple) || simple=="FALSE")
+    dimL <- ncolNum
   
-  sp_and_S <- extract_sp_S(evaluated_gam_term)
+  sp_and_S <- get_gamdata(gampart, param_nr, controls$gamdata, what="sp_and_S")
   P <- sp_and_S[[1]][[1]] * sp_and_S[[2]][[1]]  
   
-  layer <- vf_block(ncolNum, nlev[1], nlev[2], dim,
+  layer <- vf_block(ncolNum, nlev[1], nlev[2], dim, dimL = dimL,
                     penalty = controls$sp_scale(data) * P, 
                     name = makelayername(term, param_nr), 
                     units = output_dim)
   
+  rowSumsProd <- function(a,b) rowSums(a*b)
+  
+  data_trafo <- function() do.call("cbind", c(list(
+    get_gamdata(gampart, param_nr, controls$gamdata, what="data_trafo")()
+  ), lapply(data[extractvar(byt)], int_0based)))
+  predict_trafo <- function(newdata) do.call("cbind", c(
+    list(get_gamdata(gampart, param_nr, controls$gamdata, what="predict_trafo")(newdata)),
+    lapply(data[extractvar(byt)],int_0based)))
+  
+  data_trafo_red <- function() do.call("cbind", lapply(data[extractvar(byt)], int_0based))
+  predict_trafo_red <- function(newdata) do.call("cbind", lapply(data[extractvar(byt)],int_0based))
+  
   list(
-    data_trafo = function() do.call("cbind", c(list(evaluated_gam_term[[1]]$X), 
-                                               lapply(data[extractvar(byt)], int_0based))),
-    predict_trafo = function(newdata) do.call("cbind", c(
-      list(predict_gam_handler(evaluated_gam_term, newdata = newdata)),
-      lapply(data[extractvar(byt)],int_0based))),
-    input_dim = as.integer(ncolNum + length(nlev)),
+    data_trafo = data_trafo_red,
+    predict_trafo = predict_trafo_red,
+    input_dim = as.integer(length(nlev)),
     layer = layer,
-    coef = function(weights) as.matrix(weights)
+    coef = function(weights) weights,
+    partial_effect = function(weights, newdata=NULL){
+      if(!is.null(newdata)) X <- predict_trafo(newdata) else
+        X <- data_trafo()
+      # +2 because 0-based and embd learns one additional empty value effect
+      latent1 <- weights[[1]][X[,ncol(X)-1]+2,] 
+      latent2 <- weights[[2]][X[,ncol(X)]+2,]
+      latentprod <- do.call("cbind", lapply(1:ncolNum, function(i) 
+        rowSumsProd(latent1[,(i-1)*dim + 1:dim],
+                    latent2[,(i-1)*dim + 1:dim])))
+      return(rowSumsProd(X[,1:(ncol(X)-2)], latentprod))
+    },
+    gamdata_nr = get_gamdata_reduced_nr(gampart, param_nr, controls$gamdata),
+    gamdata_combined = TRUE
   )
   
 }
@@ -319,11 +350,11 @@ afm_processor <- function(term, data, output_dim, param_nr, controls){
   input_dims <- sapply(gamterms, function(x) ncol(x[[1]]$X))
   penalties <- lapply(gamterms, function(x){
     
-    sp_and_S <- extract_sp_S(x)
+    sp_and_S <- create_penalty(x, controls$df, controls)[[1]]
     
     sp_and_S <- list(sp = 1, 
                      S = list(do.call("+", lapply(1:length(sp_and_S[[2]]), function(i)
-                       sp_and_S[[1]][[1]][i] * sp_and_S[[2]][[i]]))))
+                       sp_and_S[[1]][i] * sp_and_S[[2]][[i]]))))
     return(
       as.matrix(bdiag(lapply(1:length(sp_and_S[[1]]), function(i) 
         controls$sp_scale(data) * sp_and_S[[1]][[i]] * sp_and_S[[2]][[i]])))

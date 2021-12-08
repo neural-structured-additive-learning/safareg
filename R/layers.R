@@ -28,8 +28,8 @@ layer_arram = function(a, b, pen=NULL, name="linearArrayRWT") {
 pen_vc <- function(P, strength, nlev)
 {
   python_path <- system.file("python", package = "safareg")
-  layers <- reticulate::import_from_path("layers", path = python_path)
-  return(layers$squaredPenaltyVC(P = as.matrix(P), strength = strength, nlev = nlev))
+  misc <- reticulate::import_from_path("misc", path = python_path)
+  return(misc$squaredPenaltyVC(P = as.matrix(P), strength = strength, nlev = nlev))
 }
 
 pen_simple <- function(P, strength)
@@ -42,8 +42,8 @@ pen_simple <- function(P, strength)
 linearArrayRWT <- function(units, P, name)
 {
   python_path <- system.file("python", package = "safareg")
-  layers <- reticulate::import_from_path("layers", path = python_path)
-  return(layers$LinearArrayRWT(units = units, P = as.matrix(P), name = name))
+  misc <- reticulate::import_from_path("misc", path = python_path)
+  return(misc$LinearArrayRWT(units = units, P = as.matrix(P), name = name))
 }
 
 vc_block <- function(ncolNum, levFac, penalty = NULL, name = NULL, units = 1, with_layer = TRUE){
@@ -84,14 +84,16 @@ arraym_block <- function(ncolNum, levFac, penalty = NULL, name = NULL){
   
 }
 
-vf_block <- function(ncolNum, levFac1, levFac2, dim, penalty = NULL, name = NULL, units = 1){
+vf_block <- function(ncolNum, levFac1, levFac2, dim, dimL = NULL,
+                     penalty = NULL, name = NULL, units = 1){
   
   fz <- factorization(
     dim,
     levFac1,
     levFac2,
     NULL,
-    name_prefix = name)
+    name_prefix = name,
+    dimL = dimL)
   
   if(!is.null(penalty))
     penalty = pen_simple(penalty, 1)
@@ -103,9 +105,13 @@ vf_block <- function(ncolNum, levFac1, levFac2, dim, penalty = NULL, name = NULL
     fz_res = fz(b_c)
     
     basis_times_latent = tf$multiply(a, fz_res)
-    ret <- basis_times_latent %>% layer_dense(units = units, activation = "linear", 
-                                              name = name, use_bias = FALSE, 
-                                              kernel_regularizer = penalty)
+    if(is.null(dimL)){
+      ret <- basis_times_latent %>% layer_dense(units = units, activation = "linear", 
+                                                name = name, use_bias = FALSE, 
+                                                kernel_regularizer = penalty)
+    }else{
+      ret <- tf$reduce_sum(basis_times_latent, axis = 1L)
+    }
     
     return(ret)
     
@@ -121,18 +127,22 @@ vvc_block <- function(ncolNum, levFac1, levFac2, penalty = NULL, name = NULL, un
   if(!is.null(penalty))
     penalty = pen_vc(penalty, strength=1, nlev=levFac1*levFac2)
   
-  b <- tf$one_hot(tf$cast(tf_stride_cols(x,as.integer((ncolNum+1))), dtype="int32"), 
-                  depth=levFac1)
-  c <- tf$one_hot(tf$cast(tf_stride_cols(x,as.integer((ncolNum+2))), dtype="int32"), 
-                  depth=levFac2)
-  
-  if(length(b$shape)==2)
-    b <- tf$squeeze(b, axis=1L)
-  if(length(c$shape)==2)
-    c <- tf$squeeze(c, axis=1L)
-  
-  ret_fun <- function(x) ttp_layer(x[,as.integer(1:ncolNum)], b, c, 
-                                   pen=penalty, name=name, units=units, with_layer=with_layer)
+  ret_fun <- function(x){
+    
+    b <- tf$one_hot(tf$cast(tf_stride_cols(x,as.integer((ncolNum+1))), dtype="int32"), 
+                    depth=levFac1)
+    c <- tf$one_hot(tf$cast(tf_stride_cols(x,as.integer((ncolNum+2))), dtype="int32"), 
+                    depth=levFac2)
+    
+    if(length(b$shape)==2)
+      b <- tf$squeeze(b, axis=1L)
+    if(length(c$shape)==2)
+      c <- tf$squeeze(c, axis=1L)
+    
+    ttp_layer(x[,as.integer(1:ncolNum)], b, c, 
+              pen=penalty, name=name, units=units, with_layer=with_layer)
+    
+  }
   
   return(ret_fun)
 }
@@ -164,25 +174,44 @@ layer_random_effect <- function(freq, df)
   
 }
 
-factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix) {
+factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix, dimL=NULL) {
   
-  dotprod <- function(a,b) tf$math$reduce_sum(tf$multiply(a,b), 
-                                              axis=2L)
+  dotprod_org <- function(a,b) tf$math$reduce_sum(tf$multiply(a,b), axis=2L)
   
+  if(!is.null(dimL)){
+    
+    # reshape_dimL <- function(x) tf$reshape(x, c(as.integer(dimL), 
+    #                                             as.integer(embedding_dim)))
+    
+    dotprod <- function(a,b){ 
+      
+      a <- tf$split(a, num_or_size_splits = dimL, axis=2L)
+      b <- tf$split(b, num_or_size_splits = dimL, axis=2L)
+      reduced_latent <- lapply(1:length(a), function(i) dotprod_org(a[[i]],b[[i]]))
+      return(tf$concat(reduced_latent, axis = 1L))
+      
+    }
+    
+    embedding_dim <- embedding_dim * dimL
+    
+  }else{
+    dotprod <- dotprod_org
+  }
+
   dot_fun <- keras_model_custom(name = "factorization", function(self) {
     self$x_embedding <-
       layer_embedding(
         input_dim = xlev + 1,
         output_dim = embedding_dim,
         embeddings_initializer = initializer_random_uniform(minval = 0, maxval = 0.05),
-        name = paste0(name_prefix, "first_level_embedding")
+        name = paste0(name_prefix, "_first_level_embedding")
       )
     self$y_embedding <-
       layer_embedding(
         input_dim = ylev + 1,
         output_dim = embedding_dim,
         embeddings_initializer = initializer_random_uniform(minval = 0, maxval = 0.05),
-        name = paste0(name_prefix, "second_level_embedding")
+        name = paste0(name_prefix, "_second_level_embedding")
       )
     
     if(is.null(zlev)){
@@ -206,7 +235,7 @@ factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix) {
           input_dim = zlev + 1,
           output_dim = embedding_dim,
           embeddings_initializer = initializer_random_uniform(minval = 0, maxval = 0.05),
-          name = paste0(name_prefix, "third_level_embedding")
+          name = paste0(name_prefix, "_third_level_embedding")
         )
       self$dot <-
         layer_lambda(
@@ -220,7 +249,7 @@ factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix) {
     x <- tf_stride_cols(x, 1L)
     x_embedding <- self$x_embedding(x)
     y_embedding <- self$y_embedding(y)
-    z_embedding <- self$z_embedding(activities)
+    z_embedding <- self$z_embedding(z)
     self$dot(list(x_embedding, 
                   y_embedding, 
                   z_embedding))
@@ -233,3 +262,5 @@ return(dot_fun)
 }
 
 int_0based <- function(x) as.integer(x)-1L
+
+
