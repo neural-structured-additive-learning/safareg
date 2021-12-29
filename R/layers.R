@@ -617,7 +617,7 @@ factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix, dimL=NUL
   }else{
     dotprod <- dotprod_org
   }
-
+  
   dot_fun <- keras_model_custom(name = "factorization", function(self) {
     self$x_embedding <-
       layer_embedding(
@@ -660,12 +660,12 @@ factorization <- function(embedding_dim, xlev, ylev, zlev, name_prefix, dimL=NUL
       self$dot <-
         layer_lambda(
           f = function(x) {
-            dotprod(dotprod(x[[1]], x[[2]]), x[[3]])
+            dotprod(tf$multiply(x[[1]], x[[2]]), x[[3]])
           }
   )
   return(function(x, mask = NULL, training = FALSE) {
     y <- tf_stride_cols(x, 2L)
-    z <- tf_stride_cols(z, 3L)
+    z <- tf_stride_cols(x, 3L)
     x <- tf_stride_cols(x, 1L)
     x_embedding <- self$x_embedding(x)
     y_embedding <- self$y_embedding(y)
