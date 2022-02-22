@@ -330,15 +330,143 @@ afm_processor <- function(term, data, output_dim, param_nr, controls){
   
   vars <- extractvar(term)
   nfac <- extractval(term, "fac")
-  gamoptions <- "" # extractopts(term)
+  koption <- extractval(term, "k")
+  # if(is.null(koption)) koption <- 10
+  bsoption <- extractval(term, "bs")
+  # if(is.null(bsoption)) bsoption <- "'tp'"
   # extract gam part
   
   output_dim <- as.integer(output_dim)
   # extract mgcv smooth object
   gamterms <- lapply(vars, function(var){
     
-    gampart <- paste("s(", var, ")")
-    warning("add gamoptions")
+    gampart <- paste0("s(", var)
+    
+    if(!is.null(koption)){
+      ko <- koption
+      luv <- length(unique(data[[var]]))
+      if(ko > luv/2) ko <- round(luv/2)
+      gampart <- paste0(gampart, ", k = ", ko)
+    }
+    if(!is.null(bsoption)){
+      gampart <- paste0(gampart, ", bs = ", bsoption)
+    }
+    
+    gampart <- paste0(gampart, ")")
+
+    evaluated_gam_term <- handle_gam_term(object = gampart, 
+                                          data = data, 
+                                          controls = controls)
+    return(evaluated_gam_term)
+    
+  })
+  
+  input_dims <- sapply(gamterms, function(x) ncol(x[[1]]$X))
+  penalties <- lapply(gamterms, function(x){
+    
+    sp_and_S <- create_penalty(x, controls$df, controls)[[1]]
+    
+    sp_and_S <- list(sp = 1, 
+                     S = list(do.call("+", lapply(1:length(sp_and_S[[2]]), function(i)
+                       sp_and_S[[1]][i] * sp_and_S[[2]][[i]]))))
+    return(
+      as.matrix(bdiag(lapply(1:length(sp_and_S[[1]]), function(i) 
+        controls$sp_scale(data) * sp_and_S[[1]][[i]] * sp_and_S[[2]][[i]])))
+    )
+    
+  })
+  
+  splineparts <- lapply(1:nfac, function(j){
+    
+    lapply(1:length(gamterms), function(i){
+      
+      
+      
+      layer_spline(P = penalties[[i]], 
+                   name = paste0(makelayername(term, param_nr),
+                                 "te_", i, "_fac_", j), 
+                   units = output_dim)
+      
+    })
+    
+  })
+  
+  layer = function(x, ...){
+    
+    xsplit <- tf_split_multiple(x, input_dims)
+    
+    splineparts <- lapply(1:nfac, function(j) lapply(1:length(vars), function(i)
+      splineparts[[j]][[i]](xsplit[[i]])))
+    
+    firstpart <- lapply(1:nfac, function(j) tf$square(layer_add_identity(splineparts[[j]])))
+    scndpart <- lapply(1:nfac, function(j) layer_add_identity(lapply(splineparts[[j]], tf$square)))
+    combined <- lapply(1:nfac, function(j) tf$subtract(firstpart[[j]],scndpart[[j]]))
+    
+    res <- tf$multiply(0.5, layer_add_identity(combined))
+    
+    return(res)
+    
+  }
+  
+  data_trafo = function() do.call("cbind", lapply(gamterms, function(x) x[[1]]$X))
+  predict_trafo = function(newdata) do.call("cbind", lapply(gamterms, function(x)
+    predict_gam_handler(x, newdata = newdata)))
+  
+  list(
+    data_trafo = data_trafo,
+    predict_trafo = predict_trafo,
+    get_org_values = function() data[vars],
+    input_dim = as.integer(sum(input_dims)),
+    layer = layer,
+    partial_effect = function(weights, newdata=NULL){
+      pairs <- create_pairs(length(gamterms), 2)
+      if(is.null(newdata)) newdata <- list(data[vars])[rep(1,nrow(pairs))]
+      lapply(1:nrow(pairs), function(i){
+        ind_i <- pairs[i,"i"]
+        ind_j <- pairs[i,"j"]
+        rowSums(sapply(1:nfac, function(fl)
+          kronecker( 
+            (predict_gam_handler(gamterms[[ind_j]], newdata = newdata[[i]]) %*% 
+               (weights[[pairs[i,"j"]]][[fl]])),
+            predict_gam_handler(gamterms[[ind_i]], newdata = newdata[[i]]) %*% 
+              (weights[[pairs[i,"i"]]][[fl]]))))
+      })
+    },
+    coef = function(weights) as.matrix(weights)
+  )
+}
+
+#' Processor for additive higher-order factorization machine
+#' 
+#' @export
+#' 
+ahofm_processor <- function(term, data, output_dim, param_nr, controls){
+  
+  vars <- extractvar(term)
+  nfac <- extractval(term, "fac")
+  order <- extractval(term, "order")
+  koption <- extractval(term, "k")
+  # if(is.null(koption)) koption <- 10
+  bsoption <- extractval(term, "bs")
+  # if(is.null(bsoption)) bsoption <- "'tp'"
+  
+  output_dim <- as.integer(output_dim)
+  # extract mgcv smooth object
+  gamterms <- lapply(vars, function(var){
+    
+    gampart <- paste0("s(", var)
+    
+    if(!is.null(koption)){
+      ko <- koption
+      luv <- length(unique(data[[var]]))
+      if(ko > luv/2) ko <- round(luv/2)
+      gampart <- paste0(gampart, "k = ", ko)
+    }
+    if(!is.null(bsoption)){
+      gampart <- paste0(gampart, ", bs = ", bsoption)
+    }
+    
+    gampart <- paste0(gampart, ")")
     
     evaluated_gam_term <- handle_gam_term(object = gampart, 
                                           data = data, 
@@ -379,17 +507,35 @@ afm_processor <- function(term, data, output_dim, param_nr, controls){
   
   layer = function(x, ...){
     
-    xsplit <- tf$split(x, num_or_size_splits = as.integer(length(vars)), axis = 1L)
+    xsplit <- tf_split_multiple(x, input_dims)
     
     splineparts <- lapply(1:nfac, function(j) lapply(1:length(vars), function(i)
       splineparts[[j]][[i]](xsplit[[i]])))
     
-    firstpart <- lapply(1:nfac, function(j) tf$square(layer_add_identity(splineparts[[j]])))
-    scndpart <- lapply(1:nfac, function(j) layer_add_identity(lapply(splineparts[[j]], tf$square)))
-    combined <- lapply(1:nfac, function(j) tf$subtract(firstpart[[j]],scndpart[[j]]))
     
-    res <- tf$multiply(0.5, layer_add_identity(combined))
+    Dt <- lapply(1:nfac, function(j) 
+      lapply(1:order, function(t) layer_add_identity(lapply(splineparts[[j]], 
+                                                            function(c) tf$math$pow(c,t)))))
     
+    res <- tf$multiply(1/order, layer_add_identity(lapply(1:nfac, function(j){
+      
+      Acurrent <- tf$math$add(tf$multiply((-1)^(order+1), Dt[[j]][[order]]),
+                              tf$multiply((-1)^(order), tf$multiply(Dt[[j]][[1]],
+                                                                    Dt[[j]][[order-1]])))
+      
+      if(order > 2){
+        for(t in (order-2):1){
+          
+          Acurrent <- tf$math$add(Acurrent, tf$multiply((-1)^(t+1), tf$multiply(Acurrent,
+                                                                                Dt[[j]][[t]])))
+          
+        }
+      }
+      
+      return(Acurrent)
+    
+    })))
+
     return(res)
     
   }
@@ -405,18 +551,106 @@ afm_processor <- function(term, data, output_dim, param_nr, controls){
     input_dim = as.integer(sum(input_dims)),
     layer = layer,
     partial_effect = function(weights, newdata=NULL){
+      pairs <- create_pairs(length(gamterms), order)
       if(is.null(newdata)){
-        return(rowSums(pe_fun_am(list(predict_trafo=function(df) data_trafo()),
-                                 as.data.frame(data[c(extractvar(gampart), extractvar(byt))]), 
-                                 weights))) 
+        newdata <- data[vars]
+        return(
+          lapply(1:nrow(pairs), function(i){
+            inds <- pairs[i,]
+            rowSums(sapply(1:nfac, function(fl)
+              Reduce("*", lapply(inds, function(ijk)
+                predict_gam_handler(gamterms[[ijk]], newdata = newdata) %*% 
+                  (weights[[ijk]][[fl]])
+              ))
+            ))
+          })
+        )
       }else{
-        return(rowSum(pe_fun_am(list(predict_trafo=predict_trafo),
-                                df = newdata, weights)))
+        return(
+          lapply(1:nrow(pairs), function(i){
+            inds <- pairs[i,]
+            rowSums(sapply(1:nfac, function(fl)
+              Reduce("kronecker", lapply(inds, function(ijk)
+                predict_gam_handler(gamterms[[ijk]], newdata = newdata) %*% 
+                  (weights[[ijk]][[fl]])
+              ))
+            ))
+          })
+        )
       }
     },
     coef = function(weights) as.matrix(weights)
   )
 }
+
+
+#' Processor for higher-order factorization machine
+#' 
+#' @export
+#' 
+hofm_processor <- function(term, data, output_dim, param_nr, controls){
+  
+  vars <- extractvar(term)
+  nfac <- extractval(term, "fac")
+  la <- suppressWarnings(extractval(term, "la"))
+  order <- extractval(term, "order")
+  
+  output_dim <- as.integer(output_dim)
+  input_dims <- length(vars)
+  
+  weights <- lapply(1:nfac, function(j){
+    
+    function(object) layer_dense(object, name = paste0(makelayername(term, param_nr),
+                                                       "_fac_", j), 
+                                 units = output_dim, use_bias = FALSE, 
+                                 kernel_regularizer = regularizer_l2(l = la)#, 
+                                 #kernel_initializer = "zeros"
+                                 )
+    
+  })
+  
+  layer = function(x, ...){
+    
+    lms <- lapply(1:nfac, function(j) weights[[j]](x))
+    
+    Dt <- lapply(1:nfac, function(j) 
+      lapply(1:order, function(t) tf$math$pow(lms[[j]], t)))
+    
+    res <- tf$multiply(1/order, layer_add_identity(lapply(1:nfac, function(j){
+      
+      Acurrent <- tf$math$add(tf$multiply((-1)^(order+1), Dt[[j]][[order]]),
+                              tf$multiply((-1)^(order), tf$multiply(Dt[[j]][[1]],
+                                                                    Dt[[j]][[order-1]])))
+      
+      if(order > 2){
+        for(t in (order-2):1){
+          
+          Acurrent <- tf$math$add(Acurrent, tf$multiply((-1)^(t+1), tf$multiply(Acurrent,
+                                                                                Dt[[j]][[t]])))
+          
+        }
+      }
+      
+      return(Acurrent)
+      
+    })))
+    
+    return(res)
+    
+  }
+  
+  data_trafo <- function() data[vars]
+  predict_trafo <- function(newdata) newdata[vars]
+  
+  list(
+    data_trafo = data_trafo,
+    predict_trafo = predict_trafo,
+    input_dim = as.integer(input_dims),
+    layer = layer,
+    coef = function(weights) as.matrix(weights)
+  )
+}
+
 
 # tp and ttp have different positioning internally (b,a instead of a,b)
 # as this results in a sparser design and penalty matrix
@@ -438,6 +672,7 @@ ttp_layer = function(a, b, c, pen=NULL, name=NULL, units = 1L, with_layer = TRUE
   return(x)
 }
 
+#' @export
 layer_arram = function(a, b, pen=NULL, name="linearArrayRWT") {
   
   lal <- linearArrayRWT(units = c(a$shape[[2]], b$shape[[2]]), P = pen, name = name)

@@ -18,5 +18,6 @@ safareg <- function(...,
   mod <- deepregression(...,
                         additional_processors = additional_processors)
   class(mod) <- c("safareg", class(mod))
+  return(mod)
   
 }
