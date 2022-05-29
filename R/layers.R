@@ -591,9 +591,12 @@ ahofm_processor <- function(term, data, output_dim, param_nr, controls){
 hofm_processor <- function(term, data, output_dim, param_nr, controls){
   
   vars <- extractvar(term)
-  nfac <- extractval(term, "fac")
-  la <- suppressWarnings(extractval(term, "la"))
-  order <- extractval(term, "order")
+  opts <- extractvals(term, c("fac", "la", "order"))
+  nfac <- opts$fac
+  la <- opts$la
+  if(is.null(la)) la <- 0.1
+  order <- opts$order
+  if(is.null(opts$order)) order <- 2
   
   output_dim <- as.integer(output_dim)
   input_dims <- length(vars)
