@@ -22,7 +22,15 @@ mod <- deepregression(
 
 The following processors are available:
 
-* 
+* `fac_processor`: efficient computation of categorical effects with many factor levels
+* `interaction_processor`: same as `fac_processor` but for interactions of two categorical effects
+* `vc_processor`: efficient computation of varying coefficients (interaction of smooth and one or two categorical effect)
+* `am_processor`: same as `vc_processor` but using an linear array model-type formulation (only for one categorical effect)
+* `fz_processor`: computes a matrix factorization for two or three categorical effect interactions
+* `vf_processor`: same as `vc_processor` with two levels, but using a factorization approach as in the `fz_processor` 
+* `hofm_processor`: computes (higher-order) factorization machines for a given set of features
+* `afm_processor`: computes additive factorization machines for a given set of features
+* `ahofm_processor`: computes additive higher-order factorization machines for a given set of features
 
 ## Citation
 
@@ -41,7 +49,7 @@ for the efficient factor effect implementation or (time-varying) factorization a
       title = {Additive Higher-Order Factorization Machines},
       author = {David R\"ugamer},
       year = 2022,
-      journal={arXiv preprint arXiv:2205.xxxxx}
+      journal={arXiv preprint arXiv:2205.14515}
     }
     
 for (higher-order) factorization machines or additive (higher-order) factorization machines.
