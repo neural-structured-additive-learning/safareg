@@ -59,3 +59,34 @@ class LinearArrayRWT(keras.layers.Layer):
     def call(self, inputs):
         self.add_loss(tf.reduce_sum(tf.multiply(self.w, tf.matmul(self.P, self.w))))
         return tf.reduce_sum(tf.multiply(tf.matmul(inputs[0], self.w), inputs[1]), 1)
+
+def tf_row_tensor_left_part(a,b):
+    return tf_repeat(a, b$shape[1])
+
+def tf_row_tensor_right_part(a,b):
+    return tf$tile(b, c(1, a$shape[1]))
+
+def tf_row_tensor(a,b):
+    return tf.multiply(tf_row_tensor_left_part(a,b), tf_row_tensor_right_part(a,b))
+
+class OneHotFac(keras.layers.Layer):
+    def __init__(self, lev, **kwargs):
+        super(OneHotFac, self).__init__(**kwargs)
+        self.lev = lev
+ 
+    def call(self, input):
+        return tf.squeeze(tf.one_hot(tf.cast(x, dtype="int32"), depth = lev), axis=1)
+        
+class OneHotIA(keras.layers.Layer):
+    def __init__(self, xlev, ylev, **kwargs):
+        super(OneHotFac, self).__init__(**kwargs)
+        self.xlev = xlev
+        self.ylev = ylev
+ 
+    def call(self, input):
+        y = x[:,1]
+        x = x[:,0]
+        xoh = OneHotFac(xlev)(x)
+        yoh = OneHotFac(ylev)(y)
+        return tf_row_tensor(xoh, yoh)
+        
