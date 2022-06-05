@@ -1,7 +1,7 @@
 # safareg: Structured Additive Factorization Regression
 
 [![R build status](https://github.com/neural-structured-additive-learning/safareg/workflows/R-CMD-check/badge.svg)](https://github.com/neural-structured-additive-learning/safareg/actions)
-[![License: GPL v2](https://img.shields.io/badge/License-GPL_v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 Add-on pacakge for the R package [`deepregression`](https://github.com/neural-structured-additive-learning/deepregression) to fit structured additive models when the number of factor levels is prohibitively large and needs an efficient implementation, when fitting varying coefficient terms with a factorization approach, factorized effects in general, (higher-order) factorization machines, or additive (higher-order) factorization machines.
 
