@@ -61,10 +61,10 @@ class LinearArrayRWT(keras.layers.Layer):
         return tf.reduce_sum(tf.multiply(tf.matmul(inputs[0], self.w), inputs[1]), 1)
 
 def tf_row_tensor_left_part(a,b):
-    return tf_repeat(a, b$shape[1])
+    return tf_repeat(a, b.shape[1])
 
 def tf_row_tensor_right_part(a,b):
-    return tf$tile(b, c(1, a$shape[1]))
+    return tf.tile(b, c(1, a.shape[1]))
 
 def tf_row_tensor(a,b):
     return tf.multiply(tf_row_tensor_left_part(a,b), tf_row_tensor_right_part(a,b))

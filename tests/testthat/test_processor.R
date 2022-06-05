@@ -5,7 +5,7 @@ test_that("vc_processor", {
   n <- 40
   data = data.frame(a=rnorm(n), b=rnorm(n), c=gl(n/2,2), d=gl(n/2,2))
   term="vc(te(a,b), by=c(c,d))"
-  controls <- penalty_control()
+  controls <- penalty_control(df = 5)
   controls$gamdata <- deepregression::precalc_gam(list(as.formula(paste0("~ ", term))), data, controls)
   expect_equal(vc_processor(term, data, 1, 1, controls)$input_dim, 2)
   term="vc(te(a,b), by=c)"
@@ -57,7 +57,8 @@ test_that("afm_processor", {
                         ),
                         data = data, 
                         optimizer = tf$keras$optimizers$Adam(learning_rate = 1e-3),
-                        additional_processors = list(afm = afm_processor)
+                        additional_processors = list(afm = afm_processor),
+                        penalty_options = penalty_control(df = 5)
   )
   
   expect_is(mod, "deepregression")

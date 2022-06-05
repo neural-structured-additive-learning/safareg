@@ -330,9 +330,9 @@ afm_processor <- function(term, data, output_dim, param_nr, controls){
   
   vars <- extractvar(term)
   nfac <- extractval(term, "fac")
-  koption <- extractval(term, "k")
+  koption <- suppressWarnings(extractval(term, "k"))
   # if(is.null(koption)) koption <- 10
-  bsoption <- extractval(term, "bs")
+  bsoption <- suppressWarnings(extractval(term, "bs"))
   # if(is.null(bsoption)) bsoption <- "'tp'"
   # extract gam part
   

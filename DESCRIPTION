@@ -1,14 +1,25 @@
 Package: safareg
-Title: Efficient structured additive factorization and factor regression
+Title: Structured Additive FActorized REGression
 Version: 0.1
 Authors@R: c(
     person("David", "Ruegamer", , "david.ruegamer@gmail.com", role = c("aut", "cre"))
     )
 Description:
-    Efficient structured additive factorization and factor regression
+    Efficient computation of structured additive factorization regression and
+    (higher-order) additive factorization machines
+Suggests:
+    testthat,
+    knitr,
+    covr
 Depends: R (>= 4.0.0)
 Imports:
-    deepregression
+    deepregression,
+    tensorflow (>= 2.2.0),
+    tfprobability,
+    keras (>= 2.2.0),
+    mgcv,
+    dplyr,
+    Matrix
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
