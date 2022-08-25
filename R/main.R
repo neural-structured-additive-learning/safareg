@@ -8,6 +8,8 @@
 #' note that methods for the class \code{safareg} might depend on this
 #' naming convention.
 #' 
+#' @import deepregression tensorflow keras
+#' 
 safareg <- function(...,
                     additional_processors = list(fac = fac_processor,
                                                  facz = fz_processor,
