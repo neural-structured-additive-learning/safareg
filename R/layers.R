@@ -37,9 +37,9 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
         name = makelayername(term, 
                              param_nr),
         ...
-      )(onehotfac(x, nlevels(data[[extractvar(term)]]))))
+      )(onehotfac(x, nlevs(data[[extractvar(term)]]))))
   }else{
-    layer = function(x) onehotfac(x, nlevels(data[[extractvar(term)]]))
+    layer = function(x) onehotfac(x, nlevs(data[[extractvar(term)]]))
   }
   
   list(
@@ -62,8 +62,8 @@ interaction_processor <- function(term, data, output_dim, param_nr, controls = N
   if(!is.null(la))
     kr <- tf$keras$regularizers$l2(l = la)
   trms <- extractvar(term)
-  xlev <- nlevels(data[[trms[1]]])
-  ylev <- nlevels(data[[trms[2]]])
+  xlev <- nlevs(data[[trms[1]]])
+  ylev <- nlevs(data[[trms[2]]])
   
   if(controls$with_layer){
     layer = function(x, ...)
@@ -104,7 +104,7 @@ vc_processor <- function(term, data, output_dim, param_nr, controls){
   if(length(setdiff(vars, c(extractvar(gampart), extractvar(byt))))>0)
     stop("vc terms currently only support one gam term with by term(s).")
   
-  nlev <- sapply(data[extractvar(byt)], nlevels)
+  nlev <- sapply(data[extractvar(byt)], nlevs)
   if(any(nlev==0))
     stop("Can only deal with factor variables as by-terms in vc().")
   
@@ -162,7 +162,7 @@ am_processor <- function(term, data, output_dim, param_nr, controls){
   if(length(setdiff(vars, c(extractvar(gampart), extractvar(byt))))>0)
     stop("vc terms currently only support one gam term with by term(s).")
   
-  nlev <- sapply(data[extractvar(byt)], nlevels)
+  nlev <- sapply(data[extractvar(byt)], nlevs)
   if(any(nlev==0))
     stop("Can only deal with factor variables as by-terms in vc().")
   
@@ -231,10 +231,10 @@ fz_processor <- function(term, data, output_dim, param_nr, controls = NULL){
   dim <- extractval(term, "dim")
   if(is.null(dim)) dim <- 10
   trms <- extractvar(term)
-  xlev <- nlevels(data[[trms[1]]])
-  ylev <- nlevels(data[[trms[2]]])
+  xlev <- nlevs(data[[trms[1]]])
+  ylev <- nlevs(data[[trms[2]]])
   zlev <- NULL
-  if(length(trms)==3) zlev <- nlevels(data[[trms[3]]])
+  if(length(trms)==3) zlev <- nlevs(data[[trms[3]]])
   fz <- factorization(dim, xlev, ylev, zlev, 
                       name_prefix=makelayername(term, param_nr))
   
@@ -264,7 +264,7 @@ vf_processor <- function(term, data, output_dim, param_nr, controls = NULL)
   if(length(setdiff(vars, c(extractvar(gampart), extractvar(byt))))>0)
     stop("vf terms currently only support one gam term and two by terms.")
   
-  nlev <- sapply(data[extractvar(byt)], nlevels)
+  nlev <- sapply(data[extractvar(byt)], nlevs)
   if(any(nlev==0) | length(nlev)!=2)
     stop("Can only deal with (2) factor variables as by-terms in vf().")
   
@@ -325,6 +325,7 @@ vf_processor <- function(term, data, output_dim, param_nr, controls = NULL)
 #' Processor for additive factorization machine
 #' 
 #' @export
+#' @importFrom Matrix bdiag
 #' 
 afm_processor <- function(term, data, output_dim, param_nr, controls){
   
@@ -920,5 +921,11 @@ return(dot_fun)
 }
 
 int_0based <- function(x) as.integer(x)-1L
-
+nlevs <- function(x){
+  
+  if(!is.factor(x))
+    x <- as.factor(x)
+  nlevels(x)
+  
+}
 
