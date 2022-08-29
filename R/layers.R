@@ -921,6 +921,7 @@ return(dot_fun)
 }
 
 int_0based <- function(x) as.integer(x)-1L
+
 nlevs <- function(x){
   
   if(!is.factor(x))
@@ -928,4 +929,3 @@ nlevs <- function(x){
   nlevels(x)
   
 }
-
