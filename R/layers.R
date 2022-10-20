@@ -734,7 +734,7 @@ arraym_block <- function(ncolNum, levFac, penalty = NULL, name = NULL){
       tf_stride_cols(x, ncolNum+1), 
       dtype="int32"), 
       depth=levFac)
-    if(length(b$shape)==2)
+    if(length(b$shape)==3)
       b <- tf$squeeze(b, axis=1L)
     return(layer_arram(a, b, pen=penalty, name=name))
     
