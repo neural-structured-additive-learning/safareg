@@ -717,7 +717,7 @@ vc_block <- function(ncolNum, levFac, penalty = NULL, name = NULL, units = 1, wi
       tf_stride_cols(x, ncolNum+1), 
       dtype="int32"), 
       depth=levFac)
-    if(length(b$shape)==2)
+    if(length(b$shape)==3)
       b <- tf$squeeze(b, axis=1L)
     return(tp_layer(a, b, pen=penalty, name=name, units=units, with_layer=with_layer))
     
