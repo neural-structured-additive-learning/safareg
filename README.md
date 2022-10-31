@@ -43,7 +43,7 @@ When using or referencing the contents of this package, cite
       title={Factorized Structured Regression for Large-Scale Varying Coefficient Models},
       author={David R{\"u}gamer and Andreas Bender and Simon Wiegrebe and Daniel Racek and Bernd Bischl and Christian M{\"u}ller and Clemens Stachl},
       year={2022},
-      journal = {arXiv preprint arXiv:2205.13080}
+      journal = {Accepted at ECML-PKDD 2022}
     }
     
 for the efficient factor effect implementation or (time-varying) factorization approaches and
