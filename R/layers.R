@@ -1,18 +1,37 @@
-onehotfac <- function(x, lev){ 
+onehotfac <- function(x, lev, contr = c("random", "dummy")){ 
   
-  tf$squeeze(tf$one_hot(tf$cast(x, dtype="int32"), 
-                        depth = lev), 
-             axis=1L)
+  contr <- match.arg(contr)
+  contrfun <- tf$identity
+  if(contr=="dummy")
+    contrfun <- make_dummy
+  
+  contrfun(
+    tf$squeeze(tf$one_hot(tf$cast(x, dtype="int32"), 
+                          depth = lev), 
+               axis=1L)
+  )
   
 }
 
-onehotia <- function(x, xlev, ylev){
+onehotia <- function(x, xlev, ylev, contr = c("random", "dummy")){
+
+  contr <- match.arg(contr)  
+  contrfun <- tf$identity
+  if(contr=="dummy")
+    contrfun <- make_dummy
   
   y = tf_stride_cols(x, 2L)
   x = tf_stride_cols(x, 1L)
   xoh = onehotfac(x, xlev)
   yoh = onehotfac(y, ylev)
-  return(tf_row_tensor(xoh, yoh))
+  return(contrfun(tf_row_tensor(yoh, xoh)))
+  
+}
+
+make_dummy <- function(a)
+{
+  
+  tf_stride_cols(a, 2L, a$shape[[2]])
   
 }
 
@@ -24,6 +43,8 @@ onehotia <- function(x, xlev, ylev){
 fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
   # factor_layer
   la <- extractval(term, "la", default_for_missing = TRUE)
+  contr <- extractval(term, "contr", default_for_missing = TRUE, 
+                      default = "random") # possible option: "dummy"
   kr <- NULL
   if(!is.null(la))
     kr <- tf$keras$regularizers$l2(l = la)
@@ -37,9 +58,9 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
         name = makelayername(term, 
                              param_nr),
         ...
-      )(onehotfac(x, nlevs(data[[extractvar(term)]]))))
+      )(onehotfac(x, nlevs(data[[extractvar(term)]]), contr = contr)))
   }else{
-    layer = function(x) onehotfac(x, nlevs(data[[extractvar(term)]]))
+    layer = function(x) onehotfac(x, nlevs(data[[extractvar(term)]]), contr = contr)
   }
   
   list(
@@ -58,6 +79,7 @@ fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
 interaction_processor <- function(term, data, output_dim, param_nr, controls = NULL){
   # factor_layer
   la <- extractval(term, "la", default_for_missing = TRUE)
+  contr <- extractval(term, "contr", default_for_missing = TRUE, default = "random")
   kr <- NULL
   if(!is.null(la))
     kr <- tf$keras$regularizers$l2(l = la)
@@ -75,10 +97,10 @@ interaction_processor <- function(term, data, output_dim, param_nr, controls = N
                              param_nr),
         ...
       )(onehotia(x, xlev = xlev, 
-                 ylev = ylev)))
+                 ylev = ylev, contr = contr)))
   }else{
     layer = function(x) onehotia(x, xlev = xlev, 
-                                 ylev = ylev)
+                                 ylev = ylev, contr = contr)
   }
   
   list(
