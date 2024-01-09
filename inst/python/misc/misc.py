@@ -55,10 +55,17 @@ class LinearArrayRWT(keras.layers.Layer):
             trainable=True,
         )
 
-
     def call(self, inputs):
         self.add_loss(tf.reduce_sum(tf.multiply(self.w, tf.matmul(self.P, self.w))))
         return tf.reduce_sum(tf.multiply(tf.matmul(inputs[0], self.w), inputs[1]), 1, keepdims=True)
+        
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "P": self.P,
+            "units": self.units,
+        })
+        return config
 
 def tf_row_tensor_left_part(a,b):
     return tf_repeat(a, b.shape[1])

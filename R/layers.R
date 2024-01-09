@@ -40,7 +40,8 @@ make_dummy <- function(a)
 #' @import deepregression
 #' @export
 #' 
-fac_processor <- function(term, data, output_dim, param_nr, controls = NULL){
+fac_processor <- function(term, data, output_dim, 
+                          param_nr, controls = NULL, engine = "tf"){
   # factor_layer
   la <- extractval(term, "la", default_for_missing = TRUE)
   contr <- extractval(term, "contr", default_for_missing = TRUE, 
@@ -248,7 +249,8 @@ pe_fun_am <- function(pp, df, weights){
 #' 
 #' @export
 #' 
-fz_processor <- function(term, data, output_dim, param_nr, controls = NULL){
+fz_processor <- function(term, data, output_dim, 
+                         param_nr, controls = NULL, engine = "tf"){
   # factor_layer
   dim <- extractval(term, "dim")
   if(is.null(dim)) dim <- 10
@@ -275,7 +277,8 @@ fz_processor <- function(term, data, output_dim, param_nr, controls = NULL){
 #' 
 #' @export
 #' 
-vf_processor <- function(term, data, output_dim, param_nr, controls = NULL)
+vf_processor <- function(term, data, output_dim, 
+                         param_nr, controls = NULL, engine = "tf")
 {
   vars <- extractvar(term)
   dim <- extractval(term, "dim")
@@ -349,7 +352,8 @@ vf_processor <- function(term, data, output_dim, param_nr, controls = NULL)
 #' @export
 #' @importFrom Matrix bdiag
 #' 
-afm_processor <- function(term, data, output_dim, param_nr, controls){
+afm_processor <- function(term, data, output_dim, 
+                          param_nr, controls, engine = "tf"){
   
   vars <- extractvar(term)
   nfac <- extractval(term, "fac")
@@ -358,12 +362,15 @@ afm_processor <- function(term, data, output_dim, param_nr, controls){
   bsoption <- suppressWarnings(extractval(term, "bs"))
   # if(is.null(bsoption)) bsoption <- "'tp'"
   # extract gam part
+  scoption <- suppressWarnings(extractval(term, "sc"))
+  if(is.null(scoption)) scoption <- "s(" else
+    scoption <- paste0(scoption, "(")
   
   output_dim <- as.integer(output_dim)
   # extract mgcv smooth object
   gamterms <- lapply(vars, function(var){
     
-    gampart <- paste0("s(", var)
+    gampart <- paste0(scoption, var)
     
     if(!is.null(koption)){
       ko <- koption
@@ -463,21 +470,25 @@ afm_processor <- function(term, data, output_dim, param_nr, controls){
 #' 
 #' @export
 #' 
-ahofm_processor <- function(term, data, output_dim, param_nr, controls){
+ahofm_processor <- function(term, data, output_dim, 
+                            param_nr, controls, engine = "tf"){
   
   vars <- extractvar(term)
   nfac <- extractval(term, "fac")
   order <- extractval(term, "order")
-  koption <- extractval(term, "k")
+  koption <- suppressWarnings(extractval(term, "k"))
   # if(is.null(koption)) koption <- 10
-  bsoption <- extractval(term, "bs")
+  bsoption <- suppressWarnings(extractval(term, "bs"))
+  scoption <- suppressWarnings(extractval(term, "sc"))
   # if(is.null(bsoption)) bsoption <- "'tp'"
+  if(is.null(scoption)) scoption <- "s(" else
+    scoption <- paste0(scoption, "(")
   
   output_dim <- as.integer(output_dim)
   # extract mgcv smooth object
   gamterms <- lapply(vars, function(var){
     
-    gampart <- paste0("s(", var)
+    gampart <- paste0(scoption, var)
     
     if(!is.null(koption)){
       ko <- koption
@@ -592,9 +603,10 @@ ahofm_processor <- function(term, data, output_dim, param_nr, controls){
         return(
           lapply(1:nrow(pairs), function(i){
             inds <- pairs[i,]
+            this_newdata <- newdata[[i]]
             rowSums(sapply(1:nfac, function(fl)
-              Reduce("kronecker", lapply(inds, function(ijk)
-                predict_gam_handler(gamterms[[ijk]], newdata = newdata) %*% 
+              Reduce("kronecker", lapply(rev(inds), function(ijk)
+                predict_gam_handler(gamterms[[ijk]], newdata = this_newdata) %*% 
                   (weights[[ijk]][[fl]])
               ))
             ))
@@ -611,7 +623,8 @@ ahofm_processor <- function(term, data, output_dim, param_nr, controls){
 #' 
 #' @export
 #' 
-hofm_processor <- function(term, data, output_dim, param_nr, controls){
+hofm_processor <- function(term, data, output_dim, 
+                           param_nr, controls, engine = "tf"){
   
   vars <- extractvar(term)
   opts <- extractvals(term, c("fac", "la", "order"))

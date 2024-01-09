@@ -9,6 +9,7 @@
 #' naming convention.
 #' 
 #' @import deepregression tensorflow keras
+#' @export
 #' 
 safareg <- function(...,
                     additional_processors = list(fac = fac_processor,
