@@ -39,20 +39,26 @@ The following processors are available:
 
 When using or referencing the contents of this package, cite
 
-    @article{FaStR,
+    @InProceedings{FaStR,
       title={Factorized Structured Regression for Large-Scale Varying Coefficient Models},
       author={David R{\"u}gamer and Andreas Bender and Simon Wiegrebe and Daniel Racek and Bernd Bischl and Christian M{\"u}ller and Clemens Stachl},
-      year={2022},
-      journal = {Accepted at ECML-PKDD 2022}
+      year={2023},
+      publisher={Springer International Publishing},
+      booktitle="Machine Learning and Knowledge Discovery in Databases",
+      publisher="Springer Nature Switzerland",
+      address="Cham",
+      pages="20--35"
     }
     
 for the efficient factor effect implementation or (time-varying) factorization approaches and
 
-    @article{AFM,
-      title = {Additive Higher-Order Factorization Machines},
+    @InProceedings{AFM,
+      title = {Scalable Higher-Order Tensor Product Spline Models},
       author = {David R\"ugamer},
-      year = 2022,
-      journal={arXiv preprint arXiv:2205.14515}
-    }
+      year={2024},
+      booktitle = 	 {Proceedings of The 27th International Conference on Artificial Intelligence and Statistics},
+      series = 	 {Proceedings of Machine Learning Research},
+      publisher =    {PMLR}
+}
     
 for (higher-order) factorization machines or additive (higher-order) factorization machines.
